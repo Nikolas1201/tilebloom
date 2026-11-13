@@ -1,166 +1,68 @@
-// This service worker is required to expose an exported Godot project as a
-// Progressive Web App. It provides an offline fallback page telling the user
-// that they need an Internet connection to run the project if desired.
-// Incrementing CACHE_VERSION will kick off the install event and force
-// previously cached resources to be updated from the network.
-/** @type {string} */
-const CACHE_VERSION = '1794577836|5804572';
-/** @type {string} */
-const CACHE_PREFIX = 'Tilebloom-sw-cache-';
-const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
-/** @type {string} */
-const OFFLINE_URL = 'index.offline.html';
-/** @type {boolean} */
-const ENSURE_CROSSORIGIN_ISOLATION_HEADERS = false;
-// Files that will be cached on load.
-/** @type {string[]} */
-const CACHED_FILES = ["index.html","index.js","index.offline.html","index.icon.png","index.apple-touch-icon.png","index.audio.worklet.js","index.audio.position.worklet.js"];
-// Files that we might not want the user to preload, and will only be cached on first load.
-/** @type {string[]} */
-const CACHEABLE_FILES = ["index.wasm","index.pck"];
-const FULL_CACHE = CACHED_FILES.concat(CACHEABLE_FILES);
+// Tilebloom offline service worker (replaces Godot's stock one after export).
+//
+// Godot's stock worker only precaches the small files and caches index.wasm / index.pck
+// lazily, so the first visit (or the first visit after an update) left the 40 MB engine
+// uncached and offline launches hung at ~4%. This worker:
+//  - downloads EVERY file at install time (all-or-nothing; cache: 'reload' skips stale HTTP cache)
+//  - activates immediately and serves everything cache-first
+//  - keeps the previous version's cache until the new one is completely downloaded,
+//    so there is always one complete offline copy
+// 1794578136 and ["index.144x144.png","index.180x180.png","index.512x512.png","index.apple-touch-icon.png","index.audio.position.worklet.js","index.audio.worklet.js","index.html","index.icon.png","index.js","index.manifest.json","index.offline.html","index.pck","index.png","index.wasm"] are filled in by deploy_web.sh / tools/finish_web.sh.
+
+const CACHE_PREFIX = 'tilebloom-';
+const CACHE_NAME = CACHE_PREFIX + '1794578136';
+const FILES = ["index.144x144.png","index.180x180.png","index.512x512.png","index.apple-touch-icon.png","index.audio.position.worklet.js","index.audio.worklet.js","index.html","index.icon.png","index.js","index.manifest.json","index.offline.html","index.pck","index.png","index.wasm"];
+const INDEX = 'index.html';
 
 self.addEventListener('install', (event) => {
-	event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHED_FILES)));
+	event.waitUntil((async () => {
+		const cache = await caches.open(CACHE_NAME);
+		await cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })));
+		await self.skipWaiting();
+	})());
 });
 
 self.addEventListener('activate', (event) => {
-	event.waitUntil(caches.keys().then(
-		function (keys) {
-			// Remove old caches.
-			return Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key)));
-		}
-	).then(function () {
-		// Enable navigation preload if available.
-		return ('navigationPreload' in self.registration) ? self.registration.navigationPreload.enable() : Promise.resolve();
-	}));
+	event.waitUntil((async () => {
+		const keys = await caches.keys();
+		await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME).map((k) => caches.delete(k)));
+		// also drop Godot's old stock-worker caches from earlier builds
+		await Promise.all(keys.filter((k) => k.indexOf('-sw-cache-') !== -1).map((k) => caches.delete(k)));
+		await self.clients.claim();
+	})());
 });
 
-/**
- * Ensures that the response has the correct COEP/COOP headers
- * @param {Response} response
- * @returns {Response}
- */
-function ensureCrossOriginIsolationHeaders(response) {
-	if (response.headers.get('Cross-Origin-Embedder-Policy') === 'require-corp'
-		&& response.headers.get('Cross-Origin-Opener-Policy') === 'same-origin') {
-		return response;
-	}
+self.addEventListener('fetch', (event) => {
+	const req = event.request;
+	if (req.method !== 'GET') return;
+	const url = new URL(req.url);
+	if (url.origin !== self.location.origin) return;
+	const scope = new URL(self.registration.scope);
+	if (!url.pathname.startsWith(scope.pathname)) return;
 
-	const crossOriginIsolatedHeaders = new Headers(response.headers);
-	crossOriginIsolatedHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp');
-	crossOriginIsolatedHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
-	const newResponse = new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers: crossOriginIsolatedHeaders,
-	});
-
-	return newResponse;
-}
-
-/**
- * Calls fetch and cache the result if it is cacheable
- * @param {FetchEvent} event
- * @param {Cache} cache
- * @param {boolean} isCacheable
- * @returns {Response}
- */
-async function fetchAndCache(event, cache, isCacheable) {
-	// Use the preloaded response, if it's there
-	/** @type { Response } */
-	let response = await event.preloadResponse;
-	if (response == null) {
-		// Or, go over network.
-		response = await self.fetch(event.request);
-	}
-
-	if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
-		response = ensureCrossOriginIsolationHeaders(response);
-	}
-
-	if (isCacheable) {
-		// And update the cache
-		cache.put(event.request, response.clone());
-	}
-
-	return response;
-}
-
-self.addEventListener(
-	'fetch',
-	/**
-	 * Triggered on fetch
-	 * @param {FetchEvent} event
-	 */
-	(event) => {
-		const isNavigate = event.request.mode === 'navigate';
-		const url = event.request.url || '';
-		const referrer = event.request.referrer || '';
-		const base = referrer.slice(0, referrer.lastIndexOf('/') + 1);
-		const local = url.startsWith(base) ? url.replace(base, '') : '';
-		const isCacheable = FULL_CACHE.some((v) => v === local) || (base === referrer && base.endsWith(CACHED_FILES[0]));
-		if (isNavigate || isCacheable) {
-			event.respondWith((async () => {
-				// Try to use cache first
-				const cache = await caches.open(CACHE_NAME);
-				if (isNavigate) {
-					// Check if we have full cache during HTML page request.
-					/** @type {Response[]} */
-					const fullCache = await Promise.all(FULL_CACHE.map((name) => cache.match(name)));
-					const missing = fullCache.some((v) => v === undefined);
-					if (missing) {
-						try {
-							// Try network if some cached file is missing (so we can display offline page in case).
-							const response = await fetchAndCache(event, cache, isCacheable);
-							return response;
-						} catch (e) {
-							// And return the hopefully always cached offline page in case of network failure.
-							console.error('Network error: ', e); // eslint-disable-line no-console
-							return caches.match(OFFLINE_URL);
-						}
-					}
-				}
-				let cached = await cache.match(event.request);
-				if (cached != null) {
-					if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
-						cached = ensureCrossOriginIsolationHeaders(cached);
-					}
-					return cached;
-				}
-				// Try network if don't have it in cache.
-				const response = await fetchAndCache(event, cache, isCacheable);
-				return response;
-			})());
-		} else if (ENSURE_CROSSORIGIN_ISOLATION_HEADERS) {
-			event.respondWith((async () => {
-				let response = await fetch(event.request);
-				response = ensureCrossOriginIsolationHeaders(response);
-				return response;
-			})());
+	event.respondWith((async () => {
+		const cache = await caches.open(CACHE_NAME);
+		// Any page navigation inside the app (/, /index.html, ?query...) -> the cached game page.
+		if (req.mode === 'navigate') {
+			const page = await cache.match(INDEX);
+			if (page) return page;
+			try { return await fetch(req); } catch (e) { return new Response('Offline and not cached yet.', { status: 503 }); }
 		}
-	}
-);
+		const cached = await cache.match(req, { ignoreSearch: true });
+		if (cached) return cached;
+		try {
+			const resp = await fetch(req);
+			if (resp.ok && resp.type === 'basic') cache.put(req, resp.clone());
+			return resp;
+		} catch (e) {
+			return new Response('', { status: 504 });
+		}
+	})());
+});
 
+// Godot's page script may post these; keep them harmless.
 self.addEventListener('message', (event) => {
-	// No cross origin
-	if (event.origin !== self.origin) {
-		return;
+	if (event.data === 'claim' || event.data === 'update') {
+		self.skipWaiting().then(() => self.clients.claim());
 	}
-	const id = event.source.id || '';
-	const msg = event.data || '';
-	// Ensure it's one of our clients.
-	self.clients.get(id).then(function (client) {
-		if (!client) {
-			return; // Not a valid client.
-		}
-		if (msg === 'claim') {
-			self.skipWaiting().then(() => self.clients.claim());
-		} else if (msg === 'clear') {
-			caches.delete(CACHE_NAME);
-		} else if (msg === 'update') {
-			self.skipWaiting().then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((all) => all.forEach((c) => c.navigate(c.url)));
-		}
-	});
 });
-

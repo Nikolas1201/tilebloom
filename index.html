@@ -103,6 +103,10 @@ try{screen.orientation&&screen.orientation.lock&&screen.orientation.lock('portra
 const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":1895436,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
+// Offline support: register our precaching service worker (web/service_worker.js) right away.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+	navigator.serviceWorker.register('index.service.worker.js').catch((e) => console.warn('SW register failed', e));
+}
 
 (function () {
 	const COLORS = ['#ff5c6c', '#ffae2b', '#7fe04a', '#22d6c4', '#3d8bff', '#a46bff', '#ff5fb8', '#ff5c6c', '#ffae2b', '#7fe04a'];
