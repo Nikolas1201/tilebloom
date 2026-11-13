@@ -100,8 +100,10 @@ try{screen.orientation&&screen.orientation.lock&&screen.orientation.lock('portra
 
 <script src="index.js"></script>
 <script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":2869444,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":2884844,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
 const GODOT_THREADS_ENABLED = false;
+// Android/Chrome: keep the native "Install app" prompt so the in-game tutorial can show it.
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.tbDeferredPrompt = e; });
 const engine = new Engine(GODOT_CONFIG);
 // Offline support: register our precaching service worker (web/service_worker.js) right away.
 if ('serviceWorker' in navigator && window.isSecureContext) {
