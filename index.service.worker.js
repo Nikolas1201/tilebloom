@@ -7,11 +7,11 @@
 //  - activates immediately and serves everything cache-first
 //  - keeps the previous version's cache until the new one is completely downloaded,
 //    so there is always one complete offline copy
-// 1794581716 and ["index.144x144.png","index.180x180.png","index.512x512.png","index.apple-touch-icon.png","index.audio.position.worklet.js","index.audio.worklet.js","index.html","index.icon.png","index.js","index.manifest.json","index.offline.html","index.pck","index.png","index.wasm"] are filled in by deploy_web.sh / tools/finish_web.sh.
+// 1794582482 and ["index.144x144.png","index.180x180.png","index.192x192.png","index.512x512.png","index.apple-touch-icon.png","index.audio.position.worklet.js","index.audio.worklet.js","index.html","index.icon.png","index.js","index.manifest.json","index.maskable512.png","index.offline.html","index.pck","index.png","index.wasm"] are filled in by deploy_web.sh / tools/finish_web.sh.
 
 const CACHE_PREFIX = 'tilebloom-';
-const CACHE_NAME = CACHE_PREFIX + '1794581716';
-const FILES = ["index.144x144.png","index.180x180.png","index.512x512.png","index.apple-touch-icon.png","index.audio.position.worklet.js","index.audio.worklet.js","index.html","index.icon.png","index.js","index.manifest.json","index.offline.html","index.pck","index.png","index.wasm"];
+const CACHE_NAME = CACHE_PREFIX + '1794582482';
+const FILES = ["index.144x144.png","index.180x180.png","index.192x192.png","index.512x512.png","index.apple-touch-icon.png","index.audio.position.worklet.js","index.audio.worklet.js","index.html","index.icon.png","index.js","index.manifest.json","index.maskable512.png","index.offline.html","index.pck","index.png","index.wasm"];
 const INDEX = 'index.html';
 
 self.addEventListener('install', (event) => {
