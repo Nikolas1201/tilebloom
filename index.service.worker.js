@@ -4,7 +4,7 @@
 // Incrementing CACHE_VERSION will kick off the install event and force
 // previously cached resources to be updated from the network.
 /** @type {string} */
-const CACHE_VERSION = '1794576922|6288975';
+const CACHE_VERSION = '1794577519|6872600';
 /** @type {string} */
 const CACHE_PREFIX = 'Tilebloom-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
